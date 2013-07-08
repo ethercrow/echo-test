@@ -3,6 +3,7 @@ module Node
     , NodeState (..)
     , NodeMessage (..)
     , NodeMessagePayload (..)
+    , NodeConfig (..)
     , Mailbox
     , processMessage
     , processTimeout
@@ -44,14 +45,13 @@ data NodeMessagePayload
     deriving (Eq, Show)
 
 
--- TODO: unhardcode
-pingInterval :: Int
-pingInterval = 2
+data NodeConfig = NodeConfig {
+    cfgMaxNodeId :: !Int
+  , cfgPingInterval :: !Int
+} deriving (Eq, Show)
 
-
--- TODO: unhardcode
-slaveTimeoutInterval :: Int
-slaveTimeoutInterval = 4 * pingInterval
+cfgSlaveTimeoutInterval :: NodeConfig -> Int
+cfgSlaveTimeoutInterval = (4 *) . cfgPingInterval
 
 
 processMessage :: NodeId -> NodeState -> NodeMessage
@@ -65,20 +65,22 @@ processMessage _ (Electing _) (NodeMessage _ _ Fine) = (WaitingForKing 0, V.empt
 processMessage _ s _ = (s, V.empty)
 
 
-processTimeout :: NodeId -> NodeState -> (NodeState, Mailbox)
-processTimeout i@(NodeId x) Starting =
-    -- TODO: unhardcode max node id
-    (Electing 0, V.fromList $ map (\m -> NodeMessage i (NodeId m) Alive) [(x+1) .. 2])
+processTimeout :: NodeId -> NodeConfig -> NodeState -> (NodeState, Mailbox)
+processTimeout i@(NodeId x) (NodeConfig maxNodeId _) Starting =
+    (Electing 0, V.fromList $ map (\m -> NodeMessage i (NodeId m) Alive) [(x+1) .. maxNodeId])
 
-processTimeout i@(NodeId x) (Electing t)
+processTimeout i@(NodeId x) (NodeConfig maxNodeId pingInterval) (Electing t)
     | t == pingInterval =
-        -- TODO: unhardcode max node id
-        (Master, V.fromList $ map (\m -> NodeMessage i (NodeId m) King) $ filter (/= x) [0 .. 2])
-processTimeout _ (Electing t) = (Electing (t + 1), V.empty)
+        (Master, V.fromList $ map (\m -> NodeMessage i (NodeId m) King) $ filter (/= x) [0 .. maxNodeId])
+processTimeout _ _ (Electing t) = (Electing (t + 1), V.empty)
 
-processTimeout i (WaitingForKing t) | t == pingInterval = processTimeout i Starting
-
-processTimeout _ (Slave _ t) | t == slaveTimeoutInterval = (Electing 0, V.empty)
-processTimeout i (Slave m t) =
-    (Slave m (t + 1), if t `rem` pingInterval == 0 then V.singleton $ NodeMessage i m Ping else V.empty)
-processTimeout _ s = (s, V.empty)
+processTimeout i cfg@(NodeConfig _ pingInterval) (WaitingForKing t)
+    | t == pingInterval = processTimeout i cfg Starting
+processTimeout _ cfg (Slave _ t)
+    | t == cfgSlaveTimeoutInterval cfg = (Electing 0, V.empty)
+processTimeout i (NodeConfig pingInterval _) (Slave m t) =
+    (Slave m (t + 1),
+     if t `rem` pingInterval == 0
+     then V.singleton $ NodeMessage i m Ping
+     else V.empty)
+processTimeout _ _ s = (s, V.empty)

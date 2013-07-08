@@ -13,21 +13,21 @@ simulateNSteps :: Int -> TestCluster -> TestCluster
 simulateNSteps n cluster = iterate simulateStep cluster !! n
 
 freshCluster :: TestCluster
-freshCluster = TestCluster . V.fromList $
+freshCluster = TestCluster (NodeConfig 3 4) . V.fromList $
     [ TestNode (NodeId 0) Starting V.empty
     , TestNode (NodeId 1) Starting V.empty
     , TestNode (NodeId 2) Starting V.empty
     ]
 
 electingCluster :: TestCluster
-electingCluster = TestCluster . V.fromList $
+electingCluster = TestCluster (NodeConfig 3 4) . V.fromList $
     [ TestNode (NodeId 0) (WaitingForKing 0) V.empty
     , TestNode (NodeId 1) (WaitingForKing 0) V.empty
     , TestNode (NodeId 2) (Electing 0) V.empty
     ]
 
 stableCluster :: TestCluster
-stableCluster = TestCluster . V.fromList $
+stableCluster = TestCluster (NodeConfig 3 4) . V.fromList $
     [ TestNode (NodeId 0) (Slave (NodeId 2) 0) V.empty
     , TestNode (NodeId 1) (Slave (NodeId 2) 0) V.empty
     , TestNode (NodeId 2) Master V.empty
